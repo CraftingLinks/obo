@@ -1,17 +1,21 @@
 // use std::io::BufReader;
-// use ureq;
+use ureq;
 use fastobo::ast;
+use fastobo_graphs::{self, IntoGraph, };
+use serde::{Serialize, Deserialize};
+use serde_json;
+use std::fs::File;
+use std::path::Path;
+use std::io::Write;
 
-// static HPO_URL: &str = "http://purl.obolibrary.org/obo/hp.obo";
+//static HPO_URL: &str = "http://purl.obolibrary.org/obo/hp.obo";
 static HPO_FILE_PATH: &str = "../../data/hpo/hp.obo";
 
 fn main() {
     // let resp = ureq::get(HPO_URL).call();
     // let mut reader = BufReader::new(resp.into_reader()) ;
-    // let doc = fastobo::from_reader(&mut reader).expect("error reading obo file");
-    
+    // let doc = fastobo::from_reader(&mut reader).expect("error reading obo file to OboDoc");
     let doc = fastobo::from_file(HPO_FILE_PATH).unwrap();
-
     let header = doc.header();
     println!("format: {}", header.format_version().unwrap());
     println!("data {}", header.data_version().unwrap());
@@ -41,7 +45,7 @@ fn main() {
     */
     let res = terms
         .into_iter()
-        .find(|&x| x.id().to_string().trim() == "HP:0000006").expect("didn't find the id :/");
+        .find(|&x| x.id().to_string().trim() == "HP:0000003").expect("didn't find the id :/");
     println!("{}", res);
 
     let clauses = res.clauses();
@@ -60,4 +64,26 @@ fn main() {
             println!("{}", inner);
         }
     }
+
+    // Here we create a GraphDocument from the OboDoc. This sshould allow ous to export to JSON etc.
+    println!();
+    println!("HPO OBO into GraphDocument:");
+    println!();
+
+    let doc_graph = doc.into_graph().unwrap();
+    // let graphs_len = doc_graph.graphs.len();
+    // println!("number of graphs: {}", graphs_len);
+    let nodes_count = doc_graph.graphs[0].nodes.len();
+    println!("number of nodes: {}", nodes_count);
+
+    let prefix: &str = "http://purl.obolibrary.org/obo/";
+    let node = &doc_graph.graphs[0].nodes
+        .iter()
+        .find(|&x| x.id.trim() == format!("{}HP_0000003", prefix)).expect("could not find the node");
+    let serialized = serde_json::to_string(&node);
+    let path = "../../data/hpo/hp_0000003.json";
+    let file = File::create(path).unwrap();
+    serde_json::to_writer(file, &node).unwrap();
+    fastobo_graphs::to_file("../../data/hpo/hpo.json", &doc_graph).expect("erropr writing GraphDocument to file");
+    
 }

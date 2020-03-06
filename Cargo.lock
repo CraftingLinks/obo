@@ -668,9 +668,9 @@ name = "obo"
 version = "0.1.0"
 dependencies = [
  "fastobo",
+ "fastobo-graphs",
  "redis",
  "redisgraph",
- "fastobo-graphs",
  "serde",
  "serde_json",
  "ureq",
@@ -1421,6 +1421,9 @@ checksum = "d59cefebd0c892fa2dd6de581e937301d8552cb44489cdff035c6187cb63fa5e"
 dependencies = [
  "winapi 0.2.8",
  "winapi-build",
+]
+
+[[package]]
 name = "yaml-rust"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"

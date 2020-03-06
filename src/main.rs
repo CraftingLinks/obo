@@ -2,8 +2,16 @@
 use ureq;
 use fastobo::ast;
 use redis::Client;
-use redisgraph::{Graph, RedisGraphResult};
-use fastobo_graphs::{self, IntoGraph, };
+use redisgraph::{
+    Graph,
+    RedisGraphResult,
+    result_set::{Relation, Node},
+};
+use fastobo_graphs::{
+    self,
+    IntoGraph,
+    model::GraphDocument
+};
 use serde::{Serialize, Deserialize};
 use serde_json;
 use std::fs::File;
@@ -14,6 +22,61 @@ use std::io::Write;
 static HPO_FILE_PATH: &str = "../../data/hpo/hp.obo";
 
 fn main() {
+    
+    let hpo_doc = fastobo::from_file(HPO_FILE_PATH).unwrap();
+    let hpo_obo_graph: GraphDocument = hpo_doc.into_graph().unwrap();
+    
+    //Lets try to populate a RefisGraph with HPO data!
+    let graph_name: &'static str = "hpo_graph";
+    let client_url : &'static str = "redis://127.0.0.1";
+    let client = Client::open(client_url).unwrap();
+    let mut connection = client.get_connection().expect("connection failed");
+    let mut hpo_redis_graph = Graph::open(&mut connection, graph_name).expect("error creating graph");
+
+    // copu obograph nodes and edges to redisgraph nodes and edges by looping over the obograph nodes and edges!
+
+
+    // fastobo_test();
+    // redis_test().unwrap();
+}
+
+
+pub fn redis_test() -> RedisGraphResult<()> {
+    // Lets test out the Redis and RedisGraph clients! 
+    println!("&& --- &&");
+    println!("Let's test RedisGraph!");
+    println!("$$ --- $$");
+
+    let client = Client::open("redis://127.0.0.1")?;
+    let mut connection = client.get_connection()?;
+
+    let mut graph = Graph::open(&mut connection, "MotoGP")?;
+
+    // Create six nodes (three riders, three teams) and three relationships between them.
+    graph.mutate("CREATE (:Rider {name: 'Valentino Rossi', birth_year: 1979})-[:rides]->(:Team {name: 'Yamaha'}), \
+        (:Rider {name:'Dani Pedrosa', birth_year: 1985, height: 1.58})-[:rides]->(:Team {name: 'Honda'}), \
+        (:Rider {name:'Andrea Dovizioso', birth_year: 1986, height: 1.67})-[:rides]->(:Team {name: 'Ducati'})")?;
+
+    // Get the names and birth years of all riders in team Yamaha.
+    let results: Vec<(String, u32)> = graph.query("MATCH (r:Rider)-[:rides]->(t:Team) WHERE t.name = 'Yamaha' RETURN r.name, r.birth_year")?;
+    println!("{:?}", results);
+    println!();
+    // Since we know just one rider in our graph rides for team Yamaha,
+    // we can also write this and only get the first record:
+    let (name, birth_year): (String, u32) = graph.query("MATCH (r:Rider)-[:rides]->(t:Team) WHERE t.name = 'Yamaha' RETURN r.name, r.birth_year")?;
+    // Let's now get all the data about the riders we have.
+    // Be aware of that we only know the height of some riders, and therefore we use an `Option`:
+    let results: Vec<(String, u32, Option<f32>)> = graph.query("MATCH (r:Rider) RETURN r.name, r.birth_year, r.height")?;
+    println!("{:?}", results);
+
+    // That was just a demo; we don't need this graph anymore. Let's delete it from the database:
+    graph.delete()?;
+    Ok(())
+ 
+}
+
+pub fn fastobo_test() {
+
     // let resp = ureq::get(HPO_URL).call();
     // let mut reader = BufReader::new(resp.into_reader()) ;
     // let doc = fastobo::from_reader(&mut reader).expect("error reading obo file to OboDoc");
@@ -88,40 +151,4 @@ fn main() {
     serde_json::to_writer(file, &node).unwrap();
     fastobo_graphs::to_file("../../data/hpo/hpo.json", &doc_graph).expect("erropr writing GraphDocument to file");
 
-
-    redis_test().unwrap();
-}
-
-pub fn redis_test() -> RedisGraphResult<()> {
-    // Lets test out the Redis and RedisGraph clients! 
-    println!("&& --- &&");
-    println!("Let's test RedisGraph!");
-    println!("$$ --- $$");
-
-    let client = Client::open("redis://127.0.0.1")?;
-    let mut connection = client.get_connection()?;
-
-    let mut graph = Graph::open(&mut connection, "MotoGP")?;
-
-    // Create six nodes (three riders, three teams) and three relationships between them.
-    graph.mutate("CREATE (:Rider {name: 'Valentino Rossi', birth_year: 1979})-[:rides]->(:Team {name: 'Yamaha'}), \
-        (:Rider {name:'Dani Pedrosa', birth_year: 1985, height: 1.58})-[:rides]->(:Team {name: 'Honda'}), \
-        (:Rider {name:'Andrea Dovizioso', birth_year: 1986, height: 1.67})-[:rides]->(:Team {name: 'Ducati'})")?;
-
-    // Get the names and birth years of all riders in team Yamaha.
-    let results: Vec<(String, u32)> = graph.query("MATCH (r:Rider)-[:rides]->(t:Team) WHERE t.name = 'Yamaha' RETURN r.name, r.birth_year")?;
-    println!("{:?}", results);
-    println!();
-    // Since we know just one rider in our graph rides for team Yamaha,
-    // we can also write this and only get the first record:
-    let (name, birth_year): (String, u32) = graph.query("MATCH (r:Rider)-[:rides]->(t:Team) WHERE t.name = 'Yamaha' RETURN r.name, r.birth_year")?;
-    // Let's now get all the data about the riders we have.
-    // Be aware of that we only know the height of some riders, and therefore we use an `Option`:
-    let results: Vec<(String, u32, Option<f32>)> = graph.query("MATCH (r:Rider) RETURN r.name, r.birth_year, r.height")?;
-    println!("{:?}", results);
-
-    // That was just a demo; we don't need this graph anymore. Let's delete it from the database:
-    graph.delete()?;
-    Ok(())
- 
 }

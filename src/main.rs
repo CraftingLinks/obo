@@ -1,6 +1,8 @@
 // use std::io::BufReader;
 // use ureq;
 use fastobo::ast;
+use redis::Client;
+use redisgraph::{Graph, RedisGraphResult};
 
 // static HPO_URL: &str = "http://purl.obolibrary.org/obo/hp.obo";
 static HPO_FILE_PATH: &str = "../../data/hpo/hp.obo";
@@ -60,4 +62,42 @@ fn main() {
             println!("{}", inner);
         }
     }
+
+    redis_test().unwrap();
+
+ 
+
+}
+
+pub fn redis_test() -> RedisGraphResult<()> {
+    // Lets test out the Redis and RedisGraph clients! 
+    println!("&& --- &&");
+    println!("Let's test RedisGraph!");
+    println!("$$ --- $$");
+
+    let client = Client::open("redis://127.0.0.1")?;
+    let mut connection = client.get_connection()?;
+
+    let mut graph = Graph::open(&mut connection, "MotoGP")?;
+
+    // Create six nodes (three riders, three teams) and three relationships between them.
+    graph.mutate("CREATE (:Rider {name: 'Valentino Rossi', birth_year: 1979})-[:rides]->(:Team {name: 'Yamaha'}), \
+        (:Rider {name:'Dani Pedrosa', birth_year: 1985, height: 1.58})-[:rides]->(:Team {name: 'Honda'}), \
+        (:Rider {name:'Andrea Dovizioso', birth_year: 1986, height: 1.67})-[:rides]->(:Team {name: 'Ducati'})")?;
+
+    // Get the names and birth years of all riders in team Yamaha.
+    let results: Vec<(String, u32)> = graph.query("MATCH (r:Rider)-[:rides]->(t:Team) WHERE t.name = 'Yamaha' RETURN r.name, r.birth_year")?;
+    println!("{:?}", results);
+    println!();
+    // Since we know just one rider in our graph rides for team Yamaha,
+    // we can also write this and only get the first record:
+    let (name, birth_year): (String, u32) = graph.query("MATCH (r:Rider)-[:rides]->(t:Team) WHERE t.name = 'Yamaha' RETURN r.name, r.birth_year")?;
+    // Let's now get all the data about the riders we have.
+    // Be aware of that we only know the height of some riders, and therefore we use an `Option`:
+    let results: Vec<(String, u32, Option<f32>)> = graph.query("MATCH (r:Rider) RETURN r.name, r.birth_year, r.height")?;
+    println!("{:?}", results);
+
+    // That was just a demo; we don't need this graph anymore. Let's delete it from the database:
+    graph.delete()?;
+    Ok(())
 }
